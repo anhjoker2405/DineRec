@@ -1,0 +1,19 @@
+# Dữ liệu Yelp và dữ liệu dẫn xuất: không đưa lên kho (điều khoản của Yelp)
+*.json.gz
+yelp_academic_dataset_*.json
+indy_reviews.csv
+indy_business.csv
+prototype/model/
+# Kết quả chạy lại cục bộ
+code/results/
+code/results2/
+code/results3/
+code/ch3/
+code/tn8.jsonl
+prototype/tn7_*.json
+prototype/ch4.json
+TN7_per_user.csv
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
