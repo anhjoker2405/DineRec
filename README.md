@@ -16,6 +16,7 @@ Mã nguồn của khóa luận tốt nghiệp **"Xây dựng hệ thống khuy�
 | `code/run_experiments.py` | Toàn bộ thí nghiệm TN1–TN7: chia theo thời gian, tinh chỉnh trên Val, chọn mô hình nền và λ, đo trên Test, kiểm định |
 | `code/ch3_analysis.py`, `code/ch3_extra.py` | Thống kê dữ liệu, khoảng tin cậy, các hình và số bổ sung của Chương 3 (không chọn lại tham số nào) |
 | `code/tn8_real.py`, `code/plot_tn8.py` | TN8: so khớp với Surprise và đo bộ nhớ, thời gian |
+| `code/lam_ref.py`, `code/tn9.py` | Phân tích độ nhạy của λ theo khoảng cách tham chiếu (mục 3.7 của khóa luận) và TN9 với tập ứng viên hợp nhất (mục 3.12); chỉ đọc các quyết định đã khóa, không chọn lại tham số nào |
 | `code/fig_diagrams.py`, `code/paper_fig3.py` | Sơ đồ quy trình, sơ đồ xếp hạng lại, Hình 3 của bài báo |
 | `code/vn_format.py` | Dấu phẩy thập phân cho mọi nhãn số trên hình |
 | `prototype/` | Prototype web (Flask, Leaflet 1.9.4 đóng sẵn) và các script kiểm thử TN7 |
@@ -59,11 +60,17 @@ python ch3_extra.py indy_reviews.csv indy_business.csv results3 ch3
 python tn8_real.py indy_reviews.csv indy_business.csv check 2000 5 5 >> tn8.jsonl
 python tn8_real.py indy_reviews.csv indy_business.csv ours 0 5 5 >> tn8.jsonl
 python plot_tn8.py tn8.jsonl ch3
+
+# 5. Phân tích độ nhạy của λ (mục 3.7) và TN9 (mục 3.12); mỗi lệnh khoảng 15 giây
+python lam_ref.py indy_reviews.csv indy_business.csv results3 results3/lam_ref.json
+python tn9.py indy_reviews.csv indy_business.csv results3 results3/tn9.json
 ```
 
 Vòng 1 và vòng 2 dùng lưới nhỏ hơn: vòng 1 là lệnh ở bước 2 với các giá trị mặc định (`--out results`), vòng 2 thêm `--out results2 --taus 2,5,10,20 --factors 20,50,100 --regs 0.005,0.02,0.10 --epochs 10,20,40`.
 
 **Kiểm tra đã chạy đúng.** Tệp `results3/decisions_from_val.json` phải trùng với `results/vong3/decisions_from_val.json`: mô hình nền ItemKNN với k = 10, τ = 10, λ* = 0,2, λ_P = 0,1. Các tệp CSV phải trùng với các tệp trong `results/vong3/`, trừ cột thời gian chạy `sec`. Khi nhóm chạy lại trên một máy Linux khác, sai khác lớn nhất là 8,9 × 10⁻¹⁶ do thứ tự cộng số thực.
+
+Hai tệp `lam_ref.json` và `tn9.json` cũng phải trùng với bản trong `results/vong3/`: λ** = 1 trên cả lưới thô và lưới mịn; TN9 chọn α* = 0,25, λ = 0,3 và đạt NDCG@10 = 0,0372 trên Test, hiệu so với PopNear 0,0012 [−0,0027; 0,0052]. TN9 và phân tích độ nhạy được thiết kế sau khi đã có kết quả chính, nên chỉ có giá trị thăm dò.
 
 Mọi quyết định (cấu hình, mô hình nền, λ) được chọn trên tập kiểm định (Val). Tập Test chỉ dùng để báo cáo, nhưng đã được tính ở cả ba vòng tinh chỉnh; xem phần hạn chế trong khóa luận và bài báo.
 
