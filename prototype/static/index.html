@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DineRec – khuyến nghị nhà hàng</title>
+<link rel="stylesheet" href="/static/leaflet.css">
+<style>
+  :root { --bg:#f6f7f9; --panel:#fff; --ink:#1f2933; --muted:#616e7c; --line:#d9dee4; --acc:#1d5fa8; --hist:#8a949e; --anchor:#c0392b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--ink); background:var(--bg); }
+  .wrap { display:grid; grid-template-columns: 380px 1fr; height:100vh; }
+  aside { background:var(--panel); border-right:1px solid var(--line); padding:14px 16px; overflow:auto; }
+  h1 { font-size:18px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:12px; margin-bottom:12px; }
+  label { display:block; font-weight:600; margin:10px 0 4px; }
+  input[type=text], select { width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .row > * { flex:1; }
+  button { padding:7px 10px; border:0; border-radius:6px; background:var(--acc); color:#fff; font:inherit; cursor:pointer; }
+  button.sec { background:#e8edf3; color:var(--ink); }
+  .modes label { display:inline-flex; gap:4px; font-weight:400; margin:0 10px 0 0; }
+  #status { margin-top:10px; padding:8px; background:#eef3f9; border-radius:6px; font-size:12px; color:#243b53; min-height:20px; }
+  ol { padding-left:0; list-style:none; margin:10px 0 0; }
+  li { border:1px solid var(--line); border-radius:6px; padding:6px 8px; margin-bottom:6px; cursor:pointer; }
+  li:hover { border-color:var(--acc); }
+  .nm { font-weight:600; }
+  .num { display:inline-block; min-width:22px; height:22px; border-radius:11px; background:var(--acc); color:#fff; text-align:center; font-size:12px; line-height:22px; margin-right:6px; }
+  .meta { color:var(--muted); font-size:12px; }
+  #map { height:100vh; background:#e5e9ee; }
+  .pin { background:var(--acc); color:#fff; border-radius:11px; width:22px; height:22px; text-align:center; line-height:22px; font-size:12px; font-weight:700; border:2px solid #fff; box-shadow:0 0 2px #0006; }
+  .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:12px; font-weight:600; margin-top:8px; }
+  .b-ca { background:#dbe8f6; color:#1d5fa8; } .b-gan { background:#fde8d3; color:#9a4a00; } .b-pb { background:#e6e9ed; color:#3e4c59; }
+  .legend { font-size:12px; color:var(--muted); margin-top:8px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:5px; margin-right:4px; vertical-align:middle; }
+  @media (max-width: 800px) { .wrap { grid-template-columns: 1fr; height:auto; } #map { height:60vh; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+<aside>
+  <h1>DineRec</h1>
+  <div class="sub">Khuyến nghị nhà hàng Indianapolis bằng ItemKNN kết hợp xếp hạng lại theo khoảng cách</div>
+
+  <label for="uid">Người dùng (user_id)</label>
+  <div class="row"><input id="uid" type="text" placeholder="nhập user_id hoặc chọn bên dưới"></div>
+  <div class="row" style="margin-top:6px"><select id="demo"><option value="">Người dùng mẫu…</option></select></div>
+
+  <label>Cách khuyến nghị</label>
+  <div class="modes">
+    <label><input type="radio" name="mode" value="auto" checked> ItemKNN + xếp hạng lại</label>
+    <label><input type="radio" name="mode" value="popnear"> PopNear</label>
+    <label><input type="radio" name="mode" value="mostpop"> MostPopular</label>
+  </div>
+
+  <label for="lam">Trọng số λ: <span id="lamv"></span></label>
+  <input id="lam" type="range" min="0" max="1" step="0.1" style="width:100%">
+  <div class="meta">λ = 1: chỉ theo sở thích; λ = 0: chỉ theo khoảng cách</div>
+
+  <label for="k">Số nhà hàng (K)</label>
+  <select id="k"><option>5</option><option selected>10</option><option>20</option></select>
+
+  <div class="row" style="margin-top:12px">
+    <button id="go">Khuyến nghị</button>
+    <button id="clear" class="sec">Người dùng mới</button>
+  </div>
+  <div class="meta" style="margin-top:6px">Người dùng mới: bấm “Người dùng mới” rồi nhấp lên bản đồ để chọn vị trí. Người dùng đã có lịch sử cũng có thể nhấp lên bản đồ để thay vị trí đại diện; khi đó danh sách khác với kết quả đánh giá ngoại tuyến.</div>
+  <div class="row" style="margin-top:6px"><button id="reset" class="sec">Dùng lại vị trí đại diện</button></div>
+
+  <div id="src"></div>
+  <div id="status"></div>
+  <div class="legend"><span class="dot" style="background:var(--acc)"></span>khuyến nghị
+    <span class="dot" style="background:var(--hist);margin-left:10px"></span>đã đánh giá
+    <span class="dot" style="background:var(--anchor);margin-left:10px"></span>vị trí đại diện / vị trí chọn</div>
+  <ol id="list"></ol>
+</aside>
+<div id="map"></div>
+</div>
+<script src="/static/leaflet.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const map = L.map('map');
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(map);
+const layer = L.layerGroup().addTo(map);
+let meta = null, point = null;
+
+function fmt(x, d = 2) { return (x === undefined || x === null) ? '–' : Number(x).toFixed(d); }
+
+async function init() {
+  meta = await (await fetch('/api/meta')).json();
+  map.setView([meta.center.lat, meta.center.lon], 11);
+  $('#lam').value = meta.lam; $('#lamv').textContent = meta.lam;
+  for (const u of meta.demo_users) { const o = document.createElement('option'); o.value = u; o.textContent = u; $('#demo').appendChild(o); }
+  $('#status').textContent = `Mô hình: ${meta.base} (k = ${meta.k}, τ = ${meta.tau}), M = ${meta.M}, λ* = ${meta.lam}, λ_P = ${meta.lam_P}; ${meta.n_users} người dùng, ${meta.n_items} nhà hàng.`;
+}
+
+async function run() {
+  const mode = document.querySelector('input[name=mode]:checked').value;
+  const p = new URLSearchParams({ k: $('#k').value, lam: $('#lam').value, mode });
+  const uid = $('#uid').value.trim();
+  if (uid) p.set('user_id', uid);
+  if (point) { p.set('lat', point.lat); p.set('lon', point.lng); }
+  const r = await fetch('/api/recommend?' + p);
+  const j = await r.json();
+  if (!r.ok) { $('#status').textContent = 'Lỗi: ' + j.error; return; }
+  draw(j);
+}
+
+const BR = { itemknn_rerank: 'ItemKNN + xếp hạng lại', popnear: 'PopNear quanh vị trí đại diện', mostpop: 'MostPopular',
+             popnear_new_user: 'Người dùng mới: PopNear quanh vị trí chọn', mostpop_new_user: 'Người dùng mới, chưa có vị trí: MostPopular' };
+
+const BADGE = { 'cá nhân hóa': 'b-ca', 'phổ biến gần bạn': 'b-gan', 'phổ biến': 'b-pb' };
+function draw(j) {
+  layer.clearLayers(); $('#list').innerHTML = '';
+  $('#src').innerHTML = `<span class="badge ${BADGE[j.source_label]}">Nguồn danh sách: ${j.source_label}</span>`;
+  const pts = [];
+  for (const h of j.history) {
+    L.circleMarker([h.lat, h.lon], { radius: 5, color: '#8a949e', fillOpacity: .7 }).bindTooltip(`${h.name} (${h.stars}★)`).addTo(layer); pts.push([h.lat, h.lon]);
+  }
+  if (j.anchor) { L.circleMarker([j.anchor.lat, j.anchor.lon], { radius: 8, color: '#c0392b', fillOpacity: .9 }).bindTooltip(j.anchor_source === 'selected' ? 'vị trí đã chọn' : 'vị trí đại diện').addTo(layer); pts.push([j.anchor.lat, j.anchor.lon]); }
+  for (const it of j.items) {
+    const icon = L.divIcon({ className: '', html: `<div class="pin">${it.rank}</div>`, iconSize: [22, 22] });
+    const m = L.marker([it.lat, it.lon], { icon }).bindPopup(`<b>${it.rank}. ${it.name}</b><br>${fmt(it.dist_km)} km`).addTo(layer); pts.push([it.lat, it.lon]);
+    const li = document.createElement('li');
+    const extra = it.s === undefined ? '' : ` · s = ${fmt(it.s)} · g = ${fmt(it.g)} · điểm = ${fmt(it.score)}`;
+    li.innerHTML = `<span class="num">${it.rank}</span><span class="nm">${it.name}</span><div class="meta">${fmt(it.dist_km)} km${extra}</div>`;
+    li.onclick = () => { map.setView([it.lat, it.lon], 15); m.openPopup(); };
+    $('#list').appendChild(li);
+  }
+  if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
+  const who = j.known_user ? `${j.user_id} (${j.history.length} nhà hàng đã đánh giá)` : 'người dùng mới';
+  const where = (j.known_user && j.anchor_source === 'selected') ? ' · dùng vị trí đã chọn (khác đánh giá ngoại tuyến)' : '';
+  $('#status').textContent = `${BR[j.branch]} · ${who} · λ = ${j.lam ?? '–'} · K = ${j.K} · ${j.ms} ms${where}`;
+}
+
+$('#lam').oninput = e => $('#lamv').textContent = e.target.value;
+$('#demo').onchange = e => { $('#uid').value = e.target.value; point = null; run(); };
+$('#go').onclick = run;
+$('#clear').onclick = () => { $('#uid').value = ''; $('#demo').value = ''; point = null; layer.clearLayers(); $('#list').innerHTML = ''; $('#lam').value = meta.lam_P; $('#lamv').textContent = meta.lam_P;
+  $('#status').textContent = 'Người dùng mới: nhấp lên bản đồ để chọn vị trí, hoặc bấm “Khuyến nghị” để nhận MostPopular.'; };
+map.on('click', e => { point = e.latlng; run(); });
+$('#reset').onclick = () => { point = null; run(); };
+init();
+</script>
+</body>
+</html>
